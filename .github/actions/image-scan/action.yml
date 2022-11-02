@@ -1,0 +1,89 @@
+name: "コンテナイメージ脆弱性検知"
+description: "コンテナイメージのOSやライブラリの脆弱性検知を行う(アプリケーションライブラリは検査対象外)"
+
+inputs:
+  github-token:
+    description: "Github Token"
+    required: true
+  image-ref:
+    description: "脆弱性検査対象のイメージ"
+    required: true
+  manual-url:
+    description: "脆弱性修正手順書のURL"
+    required: true
+  slack-incoming-webhook-url:
+    description: "Slack通知先Incoming Webhook URL"
+    required: true
+  container-registry-username:
+    description: "Docker HubやGitHub Container Registryにあるプライベートイメージを検査する場合のコンテナレジストリのusername"
+    required: false
+  container-registry-password:
+    description: "Docker HubやGitHub Container Registryにあるプライベートイメージを検査する場合のコンテナレジストリのpassword"
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run Trivy vulnerability scanner
+      id: image-scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        exit-code: '1'
+        ignore-unfixed: true
+        vuln-type: 'os'
+        severity: 'CRITICAL'
+        output: 'trivy-results-raw.txt'
+      env:
+        TRIVY_USERNAME: ${{ inputs.container-registry-username }}
+        TRIVY_PASSWORD: ${{ inputs.container-registry-password }}
+
+    - name: Output step summary
+      if: failure()
+      shell: bash
+      run: |
+        export BRANCH="${{ github.head_ref || github.ref_name }}"
+        export IMAGE="${{ inputs.image-ref }}"
+        export TRIVY_RESULTS=`cat trivy-results-raw.txt`
+        export MANUAL_URL="${{ inputs.manual-url }}"
+        envsubst < ./tmp/actions/.github/actions/image-scan/results.tmpl > trivy-results.txt
+        cat trivy-results.txt | tee -a $GITHUB_STEP_SUMMARY
+
+    - name: Create issue
+      if: github.event.schedule != '' && failure()
+      shell: bash
+      run: |
+        ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+        if [ -n "$ISSUE_NUM" ]; then
+          gh issue edit $ISSUE_NUM -F trivy-results.txt
+        else
+          gh issue create -t "コンテナイメージに脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability
+        fi
+        ISSUE_URL=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
+        echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Close issue
+      if: github.event.schedule != '' && success()
+      shell: bash
+      run: |
+        ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+        if [ -n "$ISSUE_NUM" ]; then
+          gh issue close $ISSUE_NUM -c "脆弱性が解消されました $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+        fi
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Send Slack notification
+      if: github.event.schedule != '' && failure()
+      id: slack
+      uses: slackapi/slack-github-action@v1.23
+      with:
+        payload: |
+          {
+              "text": ":warning: コンテナイメージに脆弱性が見つかりました ${{ env.ISSUE_URL }}"
+          }
+      env:
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
