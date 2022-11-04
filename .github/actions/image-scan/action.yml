@@ -50,7 +50,7 @@ runs:
         cat trivy-results.txt | tee -a $GITHUB_STEP_SUMMARY
 
     - name: Create issue
-      if: github.event.schedule != '' && failure()
+      if: github.event_name == 'schedule' && failure()
       shell: bash
       run: |
         ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
@@ -65,7 +65,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Close issue
-      if: github.event.schedule != '' && success()
+      if: github.event_name == 'schedule' && success()
       shell: bash
       run: |
         ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
@@ -76,7 +76,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Send Slack notification
-      if: github.event.schedule != '' && failure()
+      if: github.event_name == 'schedule' && failure()
       id: slack
       uses: slackapi/slack-github-action@v1.23
       with:
