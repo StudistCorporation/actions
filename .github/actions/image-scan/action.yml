@@ -8,6 +8,9 @@ inputs:
   image-ref:
     description: "脆弱性検査対象のイメージ"
     required: true
+  image-name:
+    description: "脆弱性検査対象のイメージを識別するための名前。指定しなければイメージ名が使用される"
+    required: false
   manual-url:
     description: "脆弱性修正手順書のURL"
     required: true
@@ -49,15 +52,26 @@ runs:
         envsubst < ./tmp/actions/.github/actions/image-scan/results.tmpl > trivy-results.txt
         cat trivy-results.txt | tee -a $GITHUB_STEP_SUMMARY
 
+    - name: Set image name
+      if: github.event_name == 'schedule' && failure()
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.image-name }}" ]; then
+          IMAGE_NAME=`echo ${{ inputs.image-name }} | sed -r "s/[^/]*\/(.*):.*$/\1/"`
+        else
+          IMAGE_NAME="${{ inputs.image-name }}"
+        fi
+        echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
+
     - name: Create issue
       if: github.event_name == 'schedule' && failure()
       shell: bash
       run: |
-        ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
         if [ -n "$ISSUE_NUM" ]; then
           ISSUE_URL=`gh issue edit $ISSUE_NUM -F trivy-results.txt`
         else
-          ISSUE_URL=`gh issue create -t "コンテナイメージに脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability`
+          ISSUE_URL=`gh issue create -t "コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability`
         fi
         echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
       env:
@@ -67,7 +81,7 @@ runs:
       if: github.event_name == 'schedule' && success()
       shell: bash
       run: |
-        ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
         if [ -n "$ISSUE_NUM" ]; then
           gh issue close $ISSUE_NUM -c "脆弱性が解消されました $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
         fi
@@ -81,7 +95,7 @@ runs:
       with:
         payload: |
           {
-              "text": ":warning: コンテナイメージに脆弱性が見つかりました ${{ env.ISSUE_URL }}"
+              "text": ":warning: コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました ${{ env.ISSUE_URL }}"
           }
       env:
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
