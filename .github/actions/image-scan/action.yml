@@ -55,11 +55,10 @@ runs:
       run: |
         ISSUE_NUM=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
         if [ -n "$ISSUE_NUM" ]; then
-          gh issue edit $ISSUE_NUM -F trivy-results.txt
+          ISSUE_URL=`gh issue edit $ISSUE_NUM -F trivy-results.txt`
         else
-          gh issue create -t "コンテナイメージに脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability
+          ISSUE_URL=`gh issue create -t "コンテナイメージに脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability`
         fi
-        ISSUE_URL=`gh issue list --search "sort:updated-desc " --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
         echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
