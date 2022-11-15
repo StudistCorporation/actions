@@ -57,9 +57,9 @@ runs:
       shell: bash
       run: |
         if [ -n "${{ inputs.image-name }}" ]; then
-          IMAGE_NAME=`echo ${{ inputs.image-name }} | sed -r "s/[^/]*\/(.*):.*$/\1/"`
-        else
           IMAGE_NAME="${{ inputs.image-name }}"
+        else
+          IMAGE_NAME=`echo ${{ inputs.image-ref }} | sed -r "s/[^/]*\/(.*):.*$/\1/"`
         fi
         echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
 
