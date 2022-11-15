@@ -67,7 +67,7 @@ runs:
       if: github.event_name == 'schedule' && failure()
       shell: bash
       run: |
-        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
         if [ -n "$ISSUE_NUM" ]; then
           ISSUE_URL=`gh issue edit $ISSUE_NUM -F trivy-results.txt`
         else
