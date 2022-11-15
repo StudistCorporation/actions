@@ -9,7 +9,7 @@ inputs:
     description: "脆弱性検査対象のイメージ"
     required: true
   image-name:
-    description: "脆弱性検査対象のイメージを識別するための名前。指定しなければイメージ名が使用される"
+    description: "脆弱性検査対象のイメージを識別するための名前。指定しなければリポジトリ名が使用される"
     required: false
   manual-url:
     description: "脆弱性修正手順書のURL"
