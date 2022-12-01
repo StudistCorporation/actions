@@ -11,6 +11,9 @@ inputs:
   image-name:
     description: "脆弱性検査対象のイメージを識別するための名前。指定しなければリポジトリ名が使用される"
     required: false
+  dockerfile-path:
+    description: "脆弱性検査対象のイメージのDockerfile path"
+    required: true
   manual-url:
     description: "脆弱性修正手順書のURL"
     required: true
@@ -100,8 +103,15 @@ runs:
     - name: Create Branch
       if: ${{ env.SHOULD_CREATE_PR == 'true' }}
       run: |
+        VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
+        echo ${VERSION}
+        NEXT_VERSION=$(( $VERSION + 1 ))
+        echo $NEXT_VERSION
+        sed -i "s/package-cache-v${VERSION}/package-cache-v${NEXT_VERSION}/" ${{ inputs.dockerfile-path }}
+        
+        git checkout -b develop/fix-image-vulnerability
         git add .
-        git commit -m "Update aws provider to ${LATEST_PROVIDER_VERSION}"
+        git commit -m "Fix image vulnerability"
         git push --set-upstream origin develop/fix-image-vulnerability
         
         DEFAULT_BRANCH=`git remote show origin | awk '/HEAD/ {print $NF}'`
