@@ -94,6 +94,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Set create pull request flg
+      shell: bash
       run: |
         git branch -r | grep develop/fix-image-vulnerability
         if [ $? -ne 0 ]; then
@@ -102,6 +103,7 @@ runs:
 
     - name: Create Branch
       if: ${{ env.SHOULD_CREATE_PR == 'true' }}
+      shell: bash
       run: |
         VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
         echo ${VERSION}
@@ -134,6 +136,7 @@ runs:
           Fix ${{ env.ISSUE_URL }} 
 
     - name: slack test
+      shell: bash
       run: |
         echo "コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました。対応をお願いします\n${{ steps.open-pr.outputs.pr_url }}"
         echo "---------"
