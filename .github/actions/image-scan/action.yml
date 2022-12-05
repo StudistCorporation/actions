@@ -154,7 +154,7 @@ runs:
         if [ '${{ env.SHOULD_CREATE_PR }}' == 'true' ]; then
           PR_URL=${{ steps.open-pr.outputs.pr_url }}
         else
-          PR_URL=`gh pr list --search "sort:updated-desc" --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
+          PR_URL=`gh pr list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
         fi
         if [ -z "$PR_URL" ]; then
           # 何かしらの理由でPR URLが取得できない場合はIssue URLを使う
