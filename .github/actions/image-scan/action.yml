@@ -11,8 +11,17 @@ inputs:
   image-name:
     description: "脆弱性検査対象のイメージを識別するための名前。指定しなければリポジトリ名が使用される"
     required: false
+  dockerfile-path:
+    description: "脆弱性検査対象のイメージのDockerfile path"
+    required: true
   manual-url:
     description: "脆弱性修正手順書のURL"
+    required: true
+  commit-user-name:
+    description: "PRを作成する際のcommit user name"
+    required: true
+  commit-user-email:
+    description: "PRを作成する際のcommit user email"
     required: true
   slack-incoming-webhook-url:
     description: "Slack通知先Incoming Webhook URL"
@@ -59,6 +68,7 @@ runs:
         if [ -n "${{ inputs.image-name }}" ]; then
           IMAGE_NAME="${{ inputs.image-name }}"
         else
+          # リポジトリ名を抽出
           IMAGE_NAME=`echo ${{ inputs.image-ref }} | sed -r "s/[^/]*\/(.*):.*$/\1/"`
         fi
         echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
@@ -88,6 +98,72 @@ runs:
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
+    - name: Set environment variables
+      if: github.event_name == 'schedule' && failure()
+      shell: bash
+      run: |
+        set +e
+        BRANCH_NAME=develop/fix-image-vulnerability-`echo ${{ env.IMAGE_NAME }} | tr '/:' '--'`
+        
+        # PR作成ブランチの存在チェック
+        git fetch origin $BRANCH_NAME
+        if [ $? -ne 0 ]; then
+          echo "SHOULD_CREATE_PR=true" >> $GITHUB_ENV 
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV 
+          # push時のデフォルトブランチ情報を取得しておく
+          DEFAULT_BRANCH=`git remote show origin | awk '/HEAD/ {print $NF}'`
+          echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV 
+        fi
+
+    - name: Create Branch
+      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && failure()
+      shell: bash
+      run: |
+        VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
+        NEXT_VERSION=$(( $VERSION + 1 ))
+        sed -i "s/package-cache-v${VERSION}/package-cache-v${NEXT_VERSION}/" ${{ inputs.dockerfile-path }}
+         
+        git config --global user.name ${{ inputs.commit-user-name }}
+        git config --global user.email ${{ inputs.commit-user-email }} 
+        git checkout -b ${{ env.BRANCH_NAME }}
+        git add ${{ inputs.dockerfile-path }}
+        git commit -m "Fix image vulnerability"
+        git push --set-upstream origin ${{ env.BRANCH_NAME }}
+
+    - name: Create pull request
+      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && failure()
+      id: create-pr
+      uses: repo-sync/pull-request@master
+      with:
+        destination_branch: ${{ env.DEFAULT_BRANCH }}
+        source_branch: ${{ env.BRANCH_NAME }}
+        github_token: ${{ inputs.github-token }}
+        pr_title: コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
+        pr_label: "image-vulnerability"
+        pr_body: |
+          ## 概要
+          コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
+
+          ## 関連Issue
+          Fix ${{ env.ISSUE_URL }}
+
+    - name: Set PR URL
+      shell: bash
+      if: github.event_name == 'schedule' && failure()
+      run: |
+        if [ '${{ env.SHOULD_CREATE_PR }}' == 'true' ]; then
+          PR_URL=${{ steps.open-pr.outputs.pr_url }}
+        else
+          PR_URL=`gh pr list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
+        fi
+        if [ -z "$PR_URL" ]; then
+          # 何かしらの理由でPR URLが取得できない場合はIssue URLを使う
+          PR_URL=${{ env.ISSUE_URL }}
+        fi
+        echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
     - name: Send Slack notification
       if: github.event_name == 'schedule' && failure()
       id: slack
@@ -95,7 +171,7 @@ runs:
       with:
         payload: |
           {
-              "text": ":warning: コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました ${{ env.ISSUE_URL }}"
+              "text": ":warning: コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました。対応をお願いします！\n${{ env.PR_URL }}"
           }
       env:
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
