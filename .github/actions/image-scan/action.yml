@@ -41,7 +41,6 @@ runs:
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: ${{ inputs.image-ref }}
-        exit-code: '1'
         ignore-unfixed: true
         vuln-type: 'os'
         severity: 'CRITICAL'
@@ -50,8 +49,15 @@ runs:
         TRIVY_USERNAME: ${{ inputs.container-registry-username }}
         TRIVY_PASSWORD: ${{ inputs.container-registry-password }}
 
+    - name: Set scan result
+      shell: bash
+      run: |
+        if ! grep -q 'Total: 0' trivy-results-raw.txt; then
+          echo "FOUND_VULNERABILITY=true" >> $GITHUB_ENV
+        fi
+
     - name: Output step summary
-      if: failure()
+      if: env.FOUND_VULNERABILITY == 'true'
       shell: bash
       run: |
         export BRANCH="${{ github.head_ref || github.ref_name }}"
@@ -62,7 +68,7 @@ runs:
         cat trivy-results.txt | tee -a $GITHUB_STEP_SUMMARY
 
     - name: Set image name
-      if: github.event_name == 'schedule' && failure()
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       shell: bash
       run: |
         if [ -n "${{ inputs.image-name }}" ]; then
@@ -74,7 +80,7 @@ runs:
         echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
 
     - name: Create issue
-      if: github.event_name == 'schedule' && failure()
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       shell: bash
       run: |
         ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
@@ -88,7 +94,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Close issue
-      if: github.event_name == 'schedule' && success()
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY != 'true'
       shell: bash
       run: |
         ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
@@ -99,39 +105,39 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Set environment variables
-      if: github.event_name == 'schedule' && failure()
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       shell: bash
       run: |
         set +e
         BRANCH_NAME=develop/fix-image-vulnerability-`echo ${{ env.IMAGE_NAME }} | tr '/:' '--'`
-        
+
         # PR作成ブランチの存在チェック
         git fetch origin $BRANCH_NAME
         if [ $? -ne 0 ]; then
-          echo "SHOULD_CREATE_PR=true" >> $GITHUB_ENV 
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV 
+          echo "SHOULD_CREATE_PR=true" >> $GITHUB_ENV
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           # push時のデフォルトブランチ情報を取得しておく
           DEFAULT_BRANCH=`git remote show origin | awk '/HEAD/ {print $NF}'`
-          echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV 
+          echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV
         fi
 
     - name: Create Branch
-      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && failure()
+      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       shell: bash
       run: |
         VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
         NEXT_VERSION=$(( $VERSION + 1 ))
         sed -i "s/package-cache-v${VERSION}/package-cache-v${NEXT_VERSION}/" ${{ inputs.dockerfile-path }}
-         
+
         git config --global user.name ${{ inputs.commit-user-name }}
-        git config --global user.email ${{ inputs.commit-user-email }} 
+        git config --global user.email ${{ inputs.commit-user-email }}
         git checkout -b ${{ env.BRANCH_NAME }}
         git add ${{ inputs.dockerfile-path }}
         git commit -m "Fix image vulnerability"
         git push --set-upstream origin ${{ env.BRANCH_NAME }}
 
     - name: Create pull request
-      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && failure()
+      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       id: create-pr
       uses: repo-sync/pull-request@master
       with:
@@ -149,7 +155,7 @@ runs:
 
     - name: Set PR URL
       shell: bash
-      if: github.event_name == 'schedule' && failure()
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       run: |
         if [ '${{ env.SHOULD_CREATE_PR }}' == 'true' ]; then
           PR_URL=${{ steps.create-pr.outputs.pr_url }}
@@ -165,8 +171,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Send Slack notification
-      if: github.event_name == 'schedule' && failure()
-      id: slack
+      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
       uses: slackapi/slack-github-action@v1.23
       with:
         payload: |
@@ -176,3 +181,22 @@ runs:
       env:
         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
+
+    - name: Send Failure notification
+      if: github.event_name == 'schedule' && failure()
+      uses: slackapi/slack-github-action@v1.23
+      with:
+        payload: |
+          {
+              "text": ":warning: コンテナイメージ脆弱性検知workflowがエラーになりました…\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+      env:
+        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
+
+    - name: Fail when found vulnerability
+      if: env.FOUND_VULNERABILITY == 'true'
+      shell: bash
+      run: |
+        # 脆弱性が見つかった場合はworkflowをfail扱いにする
+        exit 1
