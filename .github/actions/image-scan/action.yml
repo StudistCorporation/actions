@@ -172,7 +172,6 @@ runs:
 
     - name: Send Slack notification
       if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      id: slack
       uses: slackapi/slack-github-action@v1.23
       with:
         payload: |
@@ -185,7 +184,6 @@ runs:
 
     - name: Send Failure notification
       if: github.event_name == 'schedule' && failure()
-      id: slack
       uses: slackapi/slack-github-action@v1.23
       with:
         payload: |
