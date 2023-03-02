@@ -113,7 +113,11 @@ runs:
 
         # PR作成ブランチの存在チェック
         git fetch origin $BRANCH_NAME
-        if [ $? -ne 0 ]; then
+        pr_branch_exist=$(echo $?)
+        # 修正対象行があるかチェック
+        cat ${{ inputs.dockerfile-path }} | grep "package-cache-v"
+        version_up_line_exist=$(echo $?)
+        if [ $pr_branch_exist -ne 0 ] && [ $version_up_line_exist -eq 0 ]; then
           echo "SHOULD_CREATE_PR=true" >> $GITHUB_ENV
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           # push時のデフォルトブランチ情報を取得しておく
