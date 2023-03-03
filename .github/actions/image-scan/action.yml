@@ -115,7 +115,7 @@ runs:
         git fetch origin $BRANCH_NAME
         pr_branch_exist=$(echo $?)
         # 修正対象行があるかチェック
-        cat ${{ inputs.dockerfile-path }} | grep "package-cache-v"
+        grep "package-cache-v" ${{ inputs.dockerfile-path }}
         version_up_line_exist=$(echo $?)
         if [ $pr_branch_exist -ne 0 ] && [ $version_up_line_exist -eq 0 ]; then
           echo "SHOULD_CREATE_PR=true" >> $GITHUB_ENV
