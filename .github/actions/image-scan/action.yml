@@ -68,7 +68,7 @@ runs:
         cat trivy-results.txt | tee -a $GITHUB_STEP_SUMMARY
 
     - name: Set image name
-      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+      if: github.event_name == 'schedule'
       shell: bash
       run: |
         if [ -n "${{ inputs.image-name }}" ]; then
