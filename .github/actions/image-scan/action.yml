@@ -79,30 +79,30 @@ runs:
         fi
         echo "IMAGE_NAME=$IMAGE_NAME" >> $GITHUB_ENV
 
-    - name: Create issue
-      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      shell: bash
-      run: |
-        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
-        if [ -n "$ISSUE_NUM" ]; then
-          ISSUE_URL=`gh issue edit $ISSUE_NUM -F trivy-results.txt`
-        else
-          ISSUE_URL=`gh issue create -t "コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability`
-        fi
-        echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+    # - name: Create issue
+    #   if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+    #   shell: bash
+    #   run: |
+    #     ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+    #     if [ -n "$ISSUE_NUM" ]; then
+    #       ISSUE_URL=`gh issue edit $ISSUE_NUM -F trivy-results.txt`
+    #     else
+    #       ISSUE_URL=`gh issue create -t "コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました" -F trivy-results.txt -l image-vulnerability`
+    #     fi
+    #     echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+    #   env:
+    #     GITHUB_TOKEN: ${{ inputs.github-token }}
 
-    - name: Close issue
-      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY != 'true'
-      shell: bash
-      run: |
-        ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
-        if [ -n "$ISSUE_NUM" ]; then
-          gh issue close $ISSUE_NUM -c "脆弱性が解消されました $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-        fi
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+    # - name: Close issue
+    #   if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY != 'true'
+    #   shell: bash
+    #   run: |
+    #     ISSUE_NUM=`gh issue list --search "${{ env.IMAGE_NAME }} in:title sort:updated-desc" --state open --limit 1 --label image-vulnerability --json number --jq ".[].number"`
+    #     if [ -n "$ISSUE_NUM" ]; then
+    #       gh issue close $ISSUE_NUM -c "脆弱性が解消されました $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+    #     fi
+    #   env:
+    #     GITHUB_TOKEN: ${{ inputs.github-token }}
 
     - name: Set environment variables
       if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
@@ -124,78 +124,78 @@ runs:
           echo "DEFAULT_BRANCH=$DEFAULT_BRANCH" >> $GITHUB_ENV
         fi
 
-    - name: Create Branch
-      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      shell: bash
-      run: |
-        VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
-        NEXT_VERSION=$(( $VERSION + 1 ))
-        sed -i "s/package-cache-v${VERSION}/package-cache-v${NEXT_VERSION}/" ${{ inputs.dockerfile-path }}
+    # - name: Create Branch
+    #   if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+    #   shell: bash
+    #   run: |
+    #     VERSION=$(cat ${{ inputs.dockerfile-path }} | grep "package-cache-v" | sed -r 's/^.*"package-cache-v(.+)".*$/\1/')
+    #     NEXT_VERSION=$(( $VERSION + 1 ))
+    #     sed -i "s/package-cache-v${VERSION}/package-cache-v${NEXT_VERSION}/" ${{ inputs.dockerfile-path }}
 
-        git config --global user.name ${{ inputs.commit-user-name }}
-        git config --global user.email ${{ inputs.commit-user-email }}
-        git checkout -b ${{ env.BRANCH_NAME }}
-        git add ${{ inputs.dockerfile-path }}
-        git commit -m "Fix image vulnerability"
-        git push --set-upstream origin ${{ env.BRANCH_NAME }}
+    #     git config --global user.name ${{ inputs.commit-user-name }}
+    #     git config --global user.email ${{ inputs.commit-user-email }}
+    #     git checkout -b ${{ env.BRANCH_NAME }}
+    #     git add ${{ inputs.dockerfile-path }}
+    #     git commit -m "Fix image vulnerability"
+    #     git push --set-upstream origin ${{ env.BRANCH_NAME }}
 
-    - name: Create pull request
-      if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      id: create-pr
-      uses: repo-sync/pull-request@master
-      with:
-        destination_branch: ${{ env.DEFAULT_BRANCH }}
-        source_branch: ${{ env.BRANCH_NAME }}
-        github_token: ${{ inputs.github-token }}
-        pr_title: コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
-        pr_label: "image-vulnerability"
-        pr_body: |
-          ## 概要
-          コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
+    # - name: Create pull request
+    #   if: env.SHOULD_CREATE_PR == 'true' && github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+    #   id: create-pr
+    #   uses: repo-sync/pull-request@master
+    #   with:
+    #     destination_branch: ${{ env.DEFAULT_BRANCH }}
+    #     source_branch: ${{ env.BRANCH_NAME }}
+    #     github_token: ${{ inputs.github-token }}
+    #     pr_title: コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
+    #     pr_label: "image-vulnerability"
+    #     pr_body: |
+    #       ## 概要
+    #       コンテナイメージ ${{ env.IMAGE_NAME }} の脆弱性修正
 
-          ## 関連Issue
-          Fix ${{ env.ISSUE_URL }}
+    #       ## 関連Issue
+    #       Fix ${{ env.ISSUE_URL }}
 
-    - name: Set PR URL
-      shell: bash
-      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      run: |
-        if [ '${{ env.SHOULD_CREATE_PR }}' == 'true' ]; then
-          PR_URL=${{ steps.create-pr.outputs.pr_url }}
-        else
-          PR_URL=`gh pr list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
-        fi
-        if [ -z "$PR_URL" ]; then
-          # 何かしらの理由でPR URLが取得できない場合はIssue URLを使う
-          PR_URL=${{ env.ISSUE_URL }}
-        fi
-        echo "PR_URL=$PR_URL" >> $GITHUB_ENV
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+    # - name: Set PR URL
+    #   shell: bash
+    #   if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+    #   run: |
+    #     if [ '${{ env.SHOULD_CREATE_PR }}' == 'true' ]; then
+    #       PR_URL=${{ steps.create-pr.outputs.pr_url }}
+    #     else
+    #       PR_URL=`gh pr list --search "${{ env.IMAGE_NAME }} sort:updated-desc" --state open --limit 1 --label image-vulnerability --json url --jq ".[].url"`
+    #     fi
+    #     if [ -z "$PR_URL" ]; then
+    #       # 何かしらの理由でPR URLが取得できない場合はIssue URLを使う
+    #       PR_URL=${{ env.ISSUE_URL }}
+    #     fi
+    #     echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+    #   env:
+    #     GITHUB_TOKEN: ${{ inputs.github-token }}
 
-    - name: Send Slack notification
-      if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
-      uses: slackapi/slack-github-action@v1.23
-      with:
-        payload: |
-          {
-              "text": ":warning: コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました。対応をお願いします！\n${{ env.PR_URL }}"
-          }
-      env:
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
+    # - name: Send Slack notification
+    #   if: github.event_name == 'schedule' && env.FOUND_VULNERABILITY == 'true'
+    #   uses: slackapi/slack-github-action@v1.23
+    #   with:
+    #     payload: |
+    #       {
+    #           "text": ":warning: コンテナイメージ ${{ env.IMAGE_NAME }} に脆弱性が見つかりました。対応をお願いします！\n${{ env.PR_URL }}"
+    #       }
+    #   env:
+    #     SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+    #     SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
 
-    - name: Send Failure notification
-      if: github.event_name == 'schedule' && failure()
-      uses: slackapi/slack-github-action@v1.23
-      with:
-        payload: |
-          {
-              "text": ":warning: コンテナイメージ脆弱性検知workflowがエラーになりました…\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-      env:
-        SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
+    # - name: Send Failure notification
+    #   if: github.event_name == 'schedule' && failure()
+    #   uses: slackapi/slack-github-action@v1.23
+    #   with:
+    #     payload: |
+    #       {
+    #           "text": ":warning: コンテナイメージ脆弱性検知workflowがエラーになりました…\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    #       }
+    #   env:
+    #     SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+    #     SLACK_WEBHOOK_URL: ${{ inputs.slack-incoming-webhook-url }}
 
     - name: Fail when found vulnerability
       if: env.FOUND_VULNERABILITY == 'true'
