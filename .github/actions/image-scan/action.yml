@@ -48,6 +48,7 @@ runs:
       env:
         TRIVY_USERNAME: ${{ inputs.container-registry-username }}
         TRIVY_PASSWORD: ${{ inputs.container-registry-password }}
+        ACTIONS_RUNTIME_TOKEN: ${{ inputs.github-token }}
 
     - name: Set scan result
       shell: bash
