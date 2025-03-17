@@ -53,7 +53,7 @@ runs:
     - name: Set scan result
       shell: bash
       run: |
-        if ! grep -q 'Total: 0' trivy-results-raw.txt; then
+        if ! grep -q 'no security findings detected' trivy-results-raw.txt; then
           echo "FOUND_VULNERABILITY=true" >> $GITHUB_ENV
         fi
 
